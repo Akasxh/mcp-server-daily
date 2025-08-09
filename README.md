@@ -1,6 +1,6 @@
 # MCP Starter for Puch AI
 
-This is a starter template for creating your own Model Context Protocol (MCP) server that works with Puch AI. It comes with ready-to-use tools for job searching and image processing.
+This is a starter template for creating your own Model Context Protocol (MCP) server that works with Puch AI. It comes with ready-to-use tools for job searching and image processing. See [User Function Guide](docs/user_functions.md) for examples of available tools.
 
 ## What is MCP?
 
@@ -232,3 +232,23 @@ You can then evaluate expressions, e.g.:
 ```text
 /mcp run calculate {"expression": "sin(pi/2) + 2**3"}
 ```
+
+## Run with a Custom ngrok URL
+
+1. Start the MCP server:
+
+   ```bash
+   python mcp-bearer-token/mcp_starter.py
+   ```
+
+2. Expose port `8086` using your ngrok subdomain:
+
+   ```bash
+   ngrok http 8086 --domain=your-ngrok-name.ngrok-free.app
+   ```
+
+3. Connect from Puch AI:
+
+   ```
+   /mcp connect https://your-ngrok-name.ngrok-free.app/mcp your_secret_token_here
+   ```
