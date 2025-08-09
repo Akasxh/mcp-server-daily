@@ -165,3 +165,35 @@ To get more detailed error messages:
 Use the hashtag `#BuildWithPuch` in your posts about your MCP!
 
 This starter makes it super easy to create your own MCP server for Puch AI. Just follow the setup steps and you'll be ready to extend Puch with your custom tools!
+
+## Utility Dispatcher
+
+A small standalone module `utility_dispatcher.py` offers several handy utilities
+via a simple text-based dispatcher. Supported commands include:
+
+- `currency <amount> <from_currency> <to_currency>`
+- `unit <value> <from_unit> <to_unit>`
+- `time <city>`
+- `split <total> <num_people> <tip_percent>`
+- `age <YYYY-MM-DD>`
+- `calc <expression>`
+
+Run the module directly and enter commands when prompted:
+
+```bash
+python utility_dispatcher.py
+```
+
+Example usage:
+
+```text
+currency 100 USD EUR
+unit 10 km mi
+time Tokyo
+split 120 4 15
+age 1990-05-20
+calc sin(pi / 2) + 2**3
+```
+
+Each command returns a human-readable response and helpful error messages for
+invalid input.
