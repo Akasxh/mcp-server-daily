@@ -28,10 +28,12 @@ except Exception:  # pragma: no cover - optional dependency
         return "Legal assistant unavailable."
 import sys
 from pathlib import Path
+import xml.etree.ElementTree as ET
+import time
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from expense_tracker import ExpenseStorage
-from utility_dispatcher import split_bill as split_bill_func
+from utility_dispatcher import split_bill as split_bill_func, scientific_calculator
 
 # --- Load environment variables ---
 load_dotenv()
@@ -43,6 +45,14 @@ TIME_ZONE = os.environ.get("TIME_ZONE", "UTC")
 EXPENSE_DB_PATH = os.environ.get("EXPENSE_DB_PATH", "expenses.db")
 CALENDAR_TOKENS_FILE = os.environ.get("CALENDAR_TOKENS_FILE", "calendar_tokens.json")
 
+# Spotify OAuth credentials
+SPOTIFY_CLIENT_ID = os.environ.get("SPOTIFY_CLIENT_ID")
+SPOTIFY_CLIENT_SECRET = os.environ.get("SPOTIFY_CLIENT_SECRET")
+SPOTIFY_REFRESH_TOKEN = os.environ.get("SPOTIFY_REFRESH_TOKEN")
+
+# News cache configuration
+NEWS_CACHE_TTL = int(os.environ.get("NEWS_CACHE_TTL", "600"))
+
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
 # In-memory token store, persisted to disk
@@ -53,6 +63,12 @@ if os.path.exists(CALENDAR_TOKENS_FILE):
             _calendar_tokens.update(json.load(f))
     except Exception:
         pass
+
+# News cache structure: { (category, region, limit): (timestamp, summary_string) }
+_news_cache: dict[tuple[str, str, int], tuple[float, str]] = {}
+
+# Spotify access token
+_spotify_access_token: str | None = None
 
 
 def _save_calendar_tokens() -> None:
@@ -161,6 +177,204 @@ class Fetch:
                 break
 
         return links or ["<error>No results found.</error>"]
+
+# --- Spotify Helper Functions ---
+async def _refresh_spotify_access_token() -> str:
+    """Refresh Spotify access token using refresh token."""
+    if not all([SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET, SPOTIFY_REFRESH_TOKEN]):
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message="Spotify credentials not configured"))
+    
+    async with httpx.AsyncClient() as client:
+        resp = await client.post(
+            "https://accounts.spotify.com/api/token",
+            data={"grant_type": "refresh_token", "refresh_token": SPOTIFY_REFRESH_TOKEN},
+            auth=(SPOTIFY_CLIENT_ID, SPOTIFY_CLIENT_SECRET),
+        )
+    if resp.status_code != 200:
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message="Failed to refresh Spotify token"))
+    return resp.json()["access_token"]
+
+async def _spotify_request(method: str, url: str, **kwargs) -> httpx.Response:
+    """Make authenticated request to Spotify API."""
+    global _spotify_access_token
+    if _spotify_access_token is None:
+        _spotify_access_token = await _refresh_spotify_access_token()
+
+    headers = kwargs.pop("headers", {})
+    headers["Authorization"] = f"Bearer {_spotify_access_token}"
+    async with httpx.AsyncClient() as client:
+        resp = await client.request(method, url, headers=headers, **kwargs)
+    if resp.status_code == 401:
+        _spotify_access_token = await _refresh_spotify_access_token()
+        headers["Authorization"] = f"Bearer {_spotify_access_token}"
+        async with httpx.AsyncClient() as client:
+            resp = await client.request(method, url, headers=headers, **kwargs)
+    return resp
+
+# --- News Helper Functions ---
+def _build_news_url(category: str | None, region: str | None) -> str:
+    """Build the Google News RSS URL for given category and region."""
+    base = "https://news.google.com/rss"
+    params = []
+    if region:
+        region = region.upper()
+        params.append(f"hl={region}")
+        params.append(f"gl={region}")
+        params.append(f"ceid={region}:{region}")
+    if category:
+        params.append(f"topic={category.upper()}")
+    return f"{base}?{'&'.join(params)}" if params else base
+
+def _parse_news_rss(xml_text: str, limit: int = 5) -> list[tuple[str, str]]:
+    """Parse RSS XML and return list of (title, link)."""
+    try:
+        # Clean the XML text first
+        xml_text = xml_text.strip()
+        if not xml_text:
+            return []
+        
+        root = ET.fromstring(xml_text)
+        items: list[tuple[str, str]] = []
+        
+        # Try different possible paths for RSS structure
+        item_paths = [
+            "./channel/item",
+            ".//item",
+            "./item"
+        ]
+        
+        items_found = []
+        for path in item_paths:
+            items_found = root.findall(path)
+            if items_found:
+                break
+        
+        for item in items_found[:limit]:
+            title_elem = item.find("title")
+            link_elem = item.find("link")
+            
+            title = title_elem.text if title_elem is not None and title_elem.text else None
+            link = link_elem.text if link_elem is not None and link_elem.text else None
+            
+            if title and link:
+                # Clean up the title and link
+                title = title.strip()
+                link = link.strip()
+                if title and link:
+                    items.append((title, link))
+        
+        return items
+    except ET.ParseError:
+        # If XML parsing fails, try to extract basic information using regex
+        import re
+        items = []
+        
+        try:
+            # Simple regex to find title and link patterns
+            title_pattern = r'<title[^>]*>(.*?)</title>'
+            link_pattern = r'<link[^>]*>(.*?)</link>'
+            
+            titles = re.findall(title_pattern, xml_text, re.IGNORECASE | re.DOTALL)
+            links = re.findall(link_pattern, xml_text, re.IGNORECASE | re.DOTALL)
+            
+            # Skip the first title (usually the feed title) and match titles with links
+            for i, (title, link) in enumerate(zip(titles[1:], links[1:]), 1):
+                if i > limit:
+                    break
+                title = title.strip()
+                link = link.strip()
+                if title and link and not title.startswith("Google News"):
+                    items.append((title, link))
+        except Exception:
+            pass
+        
+        return items
+    except Exception:
+        return []
+
+async def get_headlines(
+    category: str | None = None,
+    region: str | None = None,
+    limit: int = 5,
+) -> str:
+    """Return a chatbot-friendly summary of top news headlines."""
+    try:
+        # Validate inputs
+        if limit < 1 or limit > 10:
+            limit = 5
+        
+        key = (category or "", region or "", limit)
+        now = time.time()
+        if key in _news_cache:
+            ts, summary = _news_cache[key]
+            if now - ts < NEWS_CACHE_TTL:
+                return summary
+
+        url = _build_news_url(category, region)
+        
+        # Try the main URL first
+        headlines = []
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(url, timeout=15, follow_redirects=True)
+                resp.raise_for_status()
+                xml_text = resp.text
+
+            headlines = _parse_news_rss(xml_text, limit=limit)
+        except Exception as e:
+            # If main URL fails, try fallback
+            pass
+        
+        # If no headlines found, try fallback approach
+        if not headlines:
+            fallback_url = "https://news.google.com/rss"
+            try:
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get(fallback_url, timeout=15, follow_redirects=True)
+                    resp.raise_for_status()
+                    xml_text = resp.text
+                
+                headlines = _parse_news_rss(xml_text, limit=limit)
+            except Exception:
+                pass
+        
+        # If still no headlines, try a different approach
+        if not headlines:
+            try:
+                # Try a simple news API as last resort
+                async with httpx.AsyncClient() as client:
+                    resp = await client.get("https://news.google.com/rss/search?q=latest&hl=en-US&gl=US&ceid=US:en", timeout=15)
+                    resp.raise_for_status()
+                    xml_text = resp.text
+                
+                headlines = _parse_news_rss(xml_text, limit=limit)
+            except Exception:
+                pass
+        
+        if not headlines:
+            summary = "No headlines found. Please try again later."
+        else:
+            lines = []
+            for i, (title, link) in enumerate(headlines, 1):
+                # Clean up the title and link
+                title = title.replace('\n', ' ').replace('\r', ' ').strip()
+                link = link.strip()
+                lines.append(f"{i}. {title}")
+                if link and not link.startswith('#'):
+                    lines.append(f"   Link: {link}")
+                lines.append("")
+            
+            summary = "\n".join(lines).strip()
+
+        _news_cache[key] = (now, summary)
+        return summary
+        
+    except httpx.HTTPStatusError as e:
+        return f"Error fetching news: HTTP {e.response.status_code}. Please try again later."
+    except httpx.RequestError as e:
+        return f"Error connecting to news service: {str(e)}. Please try again later."
+    except Exception as e:
+        return f"Error processing news: {str(e)}. Please try again later."
 
 # --- MCP Server Setup ---
 mcp = FastMCP(
@@ -467,6 +681,211 @@ async def weekly_summary(
         return expense_storage.weekly_summary(phone)
     except ValueError as e:
         raise McpError(ErrorData(code=INVALID_PARAMS, message=str(e)))
+
+
+# --- Spotify Tools ---
+
+SPOTIFY_PLAY_DESCRIPTION = RichToolDescription(
+    description="Play a track by Spotify ID",
+    use_when="Use this tool when the user wants to play a specific track on Spotify.",
+    side_effects="The track will start playing on the user's active Spotify device.",
+)
+
+SPOTIFY_PAUSE_DESCRIPTION = RichToolDescription(
+    description="Pause Spotify playback",
+    use_when="Use this tool when the user wants to pause the currently playing track.",
+    side_effects="Playback will be paused on the user's active Spotify device.",
+)
+
+SPOTIFY_NEXT_DESCRIPTION = RichToolDescription(
+    description="Skip to the next track",
+    use_when="Use this tool when the user wants to skip to the next track in their queue.",
+    side_effects="The next track in the queue will start playing.",
+)
+
+SPOTIFY_PREVIOUS_DESCRIPTION = RichToolDescription(
+    description="Go to the previous track",
+    use_when="Use this tool when the user wants to go back to the previous track.",
+    side_effects="The previous track will start playing.",
+)
+
+SPOTIFY_CURRENT_DESCRIPTION = RichToolDescription(
+    description="Get information about the currently playing track",
+    use_when="Use this tool when the user wants to know what's currently playing on Spotify.",
+    side_effects="Returns information about the current track including title, artist, and duration.",
+)
+
+@mcp.tool(description=SPOTIFY_PLAY_DESCRIPTION.model_dump_json())
+async def spotify_play(track_id: Annotated[str, Field(description="Spotify track ID")]) -> str:
+    """Play a track by Spotify ID."""
+    resp = await _spotify_request(
+        "PUT",
+        "https://api.spotify.com/v1/me/player/play",
+        json={"uris": [f"spotify:track:{track_id}"]},
+    )
+    if resp.status_code == 404:
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message="No active device found"))
+    if resp.status_code >= 400:
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message=resp.text))
+    return "Playing"
+
+@mcp.tool(description=SPOTIFY_PAUSE_DESCRIPTION.model_dump_json())
+async def spotify_pause() -> str:
+    """Pause Spotify playback."""
+    resp = await _spotify_request("PUT", "https://api.spotify.com/v1/me/player/pause")
+    if resp.status_code == 404:
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message="No active device found"))
+    if resp.status_code >= 400:
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message=resp.text))
+    return "Paused"
+
+@mcp.tool(description=SPOTIFY_NEXT_DESCRIPTION.model_dump_json())
+async def spotify_next() -> str:
+    """Skip to the next track."""
+    resp = await _spotify_request("POST", "https://api.spotify.com/v1/me/player/next")
+    if resp.status_code == 404:
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message="No active device found"))
+    if resp.status_code >= 400:
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message=resp.text))
+    return "Skipped to next track"
+
+@mcp.tool(description=SPOTIFY_PREVIOUS_DESCRIPTION.model_dump_json())
+async def spotify_previous() -> str:
+    """Go to the previous track."""
+    resp = await _spotify_request("POST", "https://api.spotify.com/v1/me/player/previous")
+    if resp.status_code == 404:
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message="No active device found"))
+    if resp.status_code >= 400:
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message=resp.text))
+    return "Went to previous track"
+
+@mcp.tool(description=SPOTIFY_CURRENT_DESCRIPTION.model_dump_json())
+async def spotify_current() -> str:
+    """Get information about the currently playing track."""
+    resp = await _spotify_request("GET", "https://api.spotify.com/v1/me/player/currently-playing")
+    if resp.status_code == 204:
+        return "No track currently playing"
+    if resp.status_code == 404:
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message="No active device found"))
+    if resp.status_code >= 400:
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message=resp.text))
+    data = resp.json()
+    item = data.get("item")
+    if not item:
+        return "No track currently playing"
+    title = item.get("name", "Unknown")
+    artists = ", ".join(a.get("name", "") for a in item.get("artists", []))
+    duration_ms = item.get("duration_ms", 0)
+    duration = int(duration_ms // 1000)
+    return f"{title} by {artists} ({duration}s)"
+
+
+# --- News Tools ---
+
+NEWS_HEADLINES_DESCRIPTION = RichToolDescription(
+    description="Fetch top Google News headlines",
+    use_when="Use this tool when the user wants to get the latest news headlines.",
+    side_effects="Returns a list of current news headlines with links.",
+)
+
+@mcp.tool(description=NEWS_HEADLINES_DESCRIPTION.model_dump_json())
+async def news_headlines(
+    category: Annotated[str | None, Field(description="Google News topic", example="WORLD")] = None,
+    region: Annotated[str | None, Field(description="Region code", example="US")] = None,
+    limit: Annotated[int, Field(gt=0, le=10, description="Number of headlines to return")] = 5,
+) -> str:
+    """Fetch top Google News headlines."""
+    try:
+        result = await get_headlines(category=category, region=region, limit=limit)
+        
+        # Add context about the request
+        context = []
+        if category:
+            context.append(f"Category: {category}")
+        if region:
+            context.append(f"Region: {region}")
+        
+        if context:
+            header = f"📰 **Latest News** ({', '.join(context)})\n\n"
+        else:
+            header = "📰 **Latest News**\n\n"
+        
+        return header + result
+        
+    except Exception as e:
+        return f"❌ **News Error**: Unable to fetch headlines. {str(e)}\n\nPlease try again later or check your internet connection."
+
+
+NEWS_TEST_DESCRIPTION = RichToolDescription(
+    description="Test news functionality and get debug information",
+    use_when="Use this tool to test if news functionality is working properly.",
+    side_effects="Returns debug information about news service status.",
+)
+
+@mcp.tool(description=NEWS_TEST_DESCRIPTION.model_dump_json())
+async def news_test() -> str:
+    """Test news functionality and provide debug information."""
+    try:
+        # Test basic connectivity
+        test_url = "https://news.google.com/rss"
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(test_url, timeout=10)
+            status = resp.status_code
+            content_length = len(resp.text)
+        
+        # Test parsing
+        parse_success = False
+        parse_error_msg = "Unknown error"
+        headlines = []
+        
+        try:
+            async with httpx.AsyncClient() as client:
+                resp = await client.get(test_url, timeout=10)
+                headlines = _parse_news_rss(resp.text, limit=3)
+                parse_success = len(headlines) > 0
+        except Exception as parse_error:
+            parse_success = False
+            parse_error_msg = str(parse_error)
+        
+        # Build debug report
+        report = "🔍 **News Service Debug Report**\n\n"
+        report += f"✅ **Connectivity**: HTTP {status}\n"
+        report += f"📊 **Content Size**: {content_length} characters\n"
+        
+        if parse_success:
+            report += f"✅ **Parsing**: Successful ({len(headlines)} headlines found)\n"
+            report += "\n**Sample Headlines:**\n"
+            for i, (title, link) in enumerate(headlines[:2], 1):
+                report += f"{i}. {title[:50]}...\n"
+        else:
+            report += f"❌ **Parsing**: Failed - {parse_error_msg}\n"
+        
+        report += f"\n⏰ **Cache Status**: {len(_news_cache)} cached entries\n"
+        report += f"🔧 **Cache TTL**: {NEWS_CACHE_TTL} seconds\n"
+        
+        return report
+        
+    except Exception as e:
+        return f"❌ **Debug Error**: {str(e)}"
+
+
+# --- Calculator Tools ---
+
+CALCULATOR_DESCRIPTION = RichToolDescription(
+    description="Evaluate a mathematical expression",
+    use_when="Use this tool when the user wants to perform mathematical calculations.",
+    side_effects="Returns the result of the mathematical expression evaluation.",
+)
+
+@mcp.tool(description=CALCULATOR_DESCRIPTION.model_dump_json())
+async def calculate(
+    expression: Annotated[str, Field(description="The expression to evaluate")]
+) -> float:
+    """Evaluate a math expression using the scientific calculator."""
+    try:
+        return scientific_calculator(expression)
+    except ValueError as exc:
+        raise McpError(ErrorData(code=INVALID_PARAMS, message=str(exc)))
 
 
 # Image inputs and sending images
