@@ -26,6 +26,10 @@ try:
 except Exception:  # pragma: no cover - optional dependency
     def answer_question(_: str) -> str:
         return "Legal assistant unavailable."
+import sys
+from pathlib import Path
+
+sys.path.append(str(Path(__file__).resolve().parent.parent))
 from expense_tracker import ExpenseStorage
 from utility_dispatcher import split_bill as split_bill_func
 
