@@ -3,6 +3,7 @@ import json
 from datetime import datetime, timedelta
 from typing import Annotated
 import os
+from urllib.parse import urlencode
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from fastmcp import FastMCP
@@ -26,7 +27,11 @@ TOKEN = os.environ.get("AUTH_TOKEN")
 MY_NUMBER = os.environ.get("MY_NUMBER")
 GOOGLE_CREDENTIALS_JSON = os.environ.get("GOOGLE_CREDENTIALS_JSON")
 GOOGLE_CALENDAR_ID = os.environ.get("GOOGLE_CALENDAR_ID")
+GOOGLE_OAUTH_CLIENT_ID = os.environ.get("GOOGLE_OAUTH_CLIENT_ID")
+GOOGLE_OAUTH_CLIENT_SECRET = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET")
+GOOGLE_OAUTH_REDIRECT_URI = os.environ.get("GOOGLE_OAUTH_REDIRECT_URI")
 TIME_ZONE = os.environ.get("TIME_ZONE", "UTC")
+REFRESH_TOKEN_FILE = os.path.join(os.path.dirname(__file__), "google_refresh_tokens.json")
 
 calendar_service = None
 if GOOGLE_CREDENTIALS_JSON and GOOGLE_CALENDAR_ID:
@@ -212,6 +217,65 @@ def send_whatsapp_reminder(summary: str, start_iso: str) -> None:
         )
     except Exception:
         pass
+
+
+ConnectCalendarDescription = RichToolDescription(
+    description="Initiate Google OAuth flow to connect a user's calendar.",
+    use_when="The user wants to authorize access to their Google Calendar.",
+    side_effects="Stores a refresh token for future Google Calendar operations.",
+)
+
+
+@mcp.tool(description=ConnectCalendarDescription.model_dump_json())
+async def connect_calendar(
+    phone_number: Annotated[str, Field(description="User's phone number identifier")],
+    code: Annotated[str | None, Field(description="Authorization code returned by Google")] = None,
+) -> str:
+    if not all([GOOGLE_OAUTH_CLIENT_ID, GOOGLE_OAUTH_CLIENT_SECRET, GOOGLE_OAUTH_REDIRECT_URI]):
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message="Google OAuth is not configured"))
+
+    if code is None:
+        params = {
+            "client_id": GOOGLE_OAUTH_CLIENT_ID,
+            "redirect_uri": GOOGLE_OAUTH_REDIRECT_URI,
+            "response_type": "code",
+            "scope": "https://www.googleapis.com/auth/calendar",
+            "access_type": "offline",
+            "prompt": "consent",
+        }
+        return "https://accounts.google.com/o/oauth2/v2/auth?" + urlencode(params)
+
+    data = {
+        "code": code,
+        "client_id": GOOGLE_OAUTH_CLIENT_ID,
+        "client_secret": GOOGLE_OAUTH_CLIENT_SECRET,
+        "redirect_uri": GOOGLE_OAUTH_REDIRECT_URI,
+        "grant_type": "authorization_code",
+    }
+    async with httpx.AsyncClient() as client:
+        resp = await client.post("https://oauth2.googleapis.com/token", data=data, timeout=20)
+
+    if resp.status_code >= 400:
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Token exchange failed: {resp.text}"))
+
+    token_data = resp.json()
+    refresh_token = token_data.get("refresh_token")
+    if not refresh_token:
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message="No refresh token returned by Google"))
+
+    tokens: dict[str, str] = {}
+    if os.path.exists(REFRESH_TOKEN_FILE):
+        try:
+            with open(REFRESH_TOKEN_FILE, "r") as f:
+                tokens = json.load(f)
+        except Exception:
+            tokens = {}
+
+    tokens[phone_number] = refresh_token
+    with open(REFRESH_TOKEN_FILE, "w") as f:
+        json.dump(tokens, f)
+
+    return "Calendar connected successfully."
 
 
 AddEventDescription = RichToolDescription(

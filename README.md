@@ -54,11 +54,16 @@ Then edit `.env` and add your details:
 ```env
 AUTH_TOKEN=your_secret_token_here
 MY_NUMBER=919876543210
+GOOGLE_OAUTH_CLIENT_ID=your_google_client_id
+GOOGLE_OAUTH_CLIENT_SECRET=your_google_client_secret
+GOOGLE_OAUTH_REDIRECT_URI=https://your-domain.ngrok.app/oauth2callback
 ```
 
 **Important Notes:**
 - `AUTH_TOKEN`: This is your secret token for authentication. Keep it safe!
 - `MY_NUMBER`: Your WhatsApp number in format `{country_code}{number}` (e.g., `919876543210` for +91-9876543210)
+- `GOOGLE_OAUTH_CLIENT_ID` / `GOOGLE_OAUTH_CLIENT_SECRET`: Credentials from your Google Cloud project for OAuth.
+- `GOOGLE_OAUTH_REDIRECT_URI`: Redirect URL registered with Google for OAuth callbacks.
 
 ### Step 3: Run the Server
 
