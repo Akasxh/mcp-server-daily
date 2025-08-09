@@ -3,8 +3,8 @@ from __future__ import annotations
 
 import os
 import time
-from dataclasses import dataclass
 from typing import List, Tuple
+
 import httpx
 import xml.etree.ElementTree as ET
 
@@ -60,10 +60,13 @@ def get_headlines(category: str | None = None, region: str | None = None) -> str
             return summary
 
     url = _build_url(category, region)
-    with httpx.Client() as client:
-        resp = client.get(url, timeout=10, follow_redirects=True)
-        resp.raise_for_status()
-        xml_text = resp.text
+    try:
+        with httpx.Client() as client:
+            resp = client.get(url, timeout=10, follow_redirects=True)
+            resp.raise_for_status()
+            xml_text = resp.text
+    except httpx.HTTPError:
+        return "Error fetching news headlines. Please try again later."
 
     headlines = _parse_rss(xml_text)
     if not headlines:
