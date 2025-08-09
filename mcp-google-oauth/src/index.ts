@@ -87,7 +87,122 @@ export class MyMCP extends McpAgent<Env, Record<string, never>, Props> {
         }
       },
     )
+
+    // Google Drive search files tool
+    this.server.tool('search_files', { query: z.string() }, async ({ query }) => {
+      if (!this.props.accessToken) {
+        return {
+          content: [
+            {
+              text: 'No Google access token found. Please authenticate with Google first.',
+              type: 'text',
+            },
+          ],
+        }
+      }
+
+      const url =
+        'https://www.googleapis.com/drive/v3/files?fields=files(id,name,mimeType)&q=' + encodeURIComponent(`name contains '${query}'`)
+
+      const resp = await fetch(url, {
+        headers: { Authorization: `Bearer ${this.props.accessToken}` },
+      })
+
+      if (!resp.ok) {
+        const errorText = await resp.text()
+        return {
+          content: [{ text: `Drive search failed: ${errorText}`, type: 'text' }],
+        }
+      }
+
+      const data = (await resp.json()) as {
+        files: { id: string; name: string; mimeType: string }[]
+      }
+
+      const results = data.files.map((f) => `${f.name} (${f.mimeType}) - gdrive:///${f.id}`).join('\n')
+
+      return {
+        content: [{ text: results || 'No files found.', type: 'text' }],
+      }
+    })
+
+    // Google Drive read file tool
+    this.server.tool('read_file', { file_id: z.string() }, async ({ file_id }) => {
+      if (!this.props.accessToken) {
+        return {
+          content: [
+            {
+              text: 'No Google access token found. Please authenticate with Google first.',
+              type: 'text',
+            },
+          ],
+        }
+      }
+
+      const id = file_id.startsWith('gdrive:///') ? file_id.replace('gdrive:///', '') : file_id
+
+      const metaResp = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?fields=name,mimeType`, {
+        headers: { Authorization: `Bearer ${this.props.accessToken}` },
+      })
+
+      if (!metaResp.ok) {
+        const errorText = await metaResp.text()
+        return {
+          content: [{ text: `Failed to fetch file metadata: ${errorText}`, type: 'text' }],
+        }
+      }
+
+      const { mimeType } = (await metaResp.json()) as {
+        name: string
+        mimeType: string
+      }
+
+      const fileResp = await fetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, {
+        headers: { Authorization: `Bearer ${this.props.accessToken}` },
+      })
+
+      if (!fileResp.ok) {
+        const errorText = await fileResp.text()
+        return {
+          content: [{ text: `Failed to download file: ${errorText}`, type: 'text' }],
+        }
+      }
+
+      const buffer = await fileResp.arrayBuffer()
+
+      if (mimeType.startsWith('text/') || mimeType === 'application/json') {
+        const text = new TextDecoder().decode(buffer)
+        return { content: [{ type: 'text', text }] }
+      }
+
+      const base64 = arrayBufferToBase64(buffer)
+      if (mimeType.startsWith('image/')) {
+        return {
+          content: [{ type: 'image', data: base64, mimeType }],
+        }
+      }
+
+      // Fallback for other binary formats like PDFs
+      return {
+        content: [
+          {
+            type: 'text',
+            text: base64,
+          },
+        ],
+      }
+    })
   }
+}
+
+function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  let binary = ''
+  const bytes = new Uint8Array(buffer)
+  const len = bytes.byteLength
+  for (let i = 0; i < len; i++) {
+    binary += String.fromCharCode(bytes[i])
+  }
+  return btoa(binary)
 }
 
 export default new OAuthProvider({
