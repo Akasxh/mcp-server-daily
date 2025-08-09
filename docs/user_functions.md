@@ -42,7 +42,7 @@ Examples:
 Fetch top Google News headlines by category and region.
 Example:
 ```
-/mcp run get_headlines {"category": "WORLD", "region": "US"}
+/mcp run headlines {"category": "WORLD", "region": "US"}
 ```
 
 ## Utility Dispatcher
