@@ -18,37 +18,52 @@ input is invalid.
 from __future__ import annotations
 
 import ast
+import json
 import math
 import operator as op
+import os
+import time
 from datetime import date, datetime
 from typing import Callable
+from urllib import error, request
 from zoneinfo import ZoneInfo
 
-# ---------------------------------------------------------------------------
-# Currency Converter
-# ---------------------------------------------------------------------------
-
-_CURRENCY_RATES: dict[str, float] = {
-    "USD": 1.0,
-    "EUR": 0.92,
-    "GBP": 0.79,
-    "JPY": 150.0,
-    "AUD": 1.52,
-    "CAD": 1.37,
-    "CHF": 0.90,
-    "CNY": 7.10,
-    "INR": 83.0,
-}
+_CACHE_TTL = 3600  # one hour
+_RATE_CACHE: dict[tuple[str, str], tuple[float, float]] = {}
 
 
 def convert_currency(amount: float, from_currency: str, to_currency: str) -> float:
-    """Convert ``amount`` from one currency to another using static rates."""
+    """Convert ``amount`` from one currency to another using a currency API.
+
+    Results are cached for an hour to limit API requests. Set the environment
+    variable ``CURRENCY_API_KEY`` with your API key.
+    """
     from_currency = from_currency.upper()
     to_currency = to_currency.upper()
-    if from_currency not in _CURRENCY_RATES or to_currency not in _CURRENCY_RATES:
-        raise ValueError("Unsupported currency code.")
-    usd = amount / _CURRENCY_RATES[from_currency]
-    return usd * _CURRENCY_RATES[to_currency]
+    key = (from_currency, to_currency)
+    now = time.time()
+    if key in _RATE_CACHE and now - _RATE_CACHE[key][1] < _CACHE_TTL:
+        rate = _RATE_CACHE[key][0]
+    else:
+        api_key = os.getenv("CURRENCY_API_KEY")
+        if not api_key:
+            raise ValueError("Currency API key not configured.")
+        url = (
+            "https://api.currencyapi.com/v3/latest?base_currency="
+            f"{from_currency}&currencies={to_currency}&apikey={api_key}"
+        )
+        try:
+            with request.urlopen(url, timeout=10) as resp:
+                data = json.load(resp)
+            rate = data["data"][to_currency]["value"]
+        except error.URLError as exc:  # pragma: no cover - network issues
+            raise RuntimeError(f"Network error: {exc.reason}") from exc
+        except KeyError as exc:
+            raise ValueError("Unsupported currency code.") from exc
+        except Exception as exc:  # pragma: no cover - unexpected API response
+            raise RuntimeError("Invalid response from currency API.") from exc
+        _RATE_CACHE[key] = (rate, now)
+    return amount * rate
 
 
 # ---------------------------------------------------------------------------
@@ -240,6 +255,10 @@ def dispatch(query: str) -> str:
             return f"{expression} = {result}"
         return "Unknown command. Available: currency, unit, time, split, age, calc."
     except ValueError as exc:
+        return str(exc)
+    except RuntimeError as exc:
+        if cmd == "currency":
+            return f"Currency conversion failed: {exc}"
         return str(exc)
 
 
