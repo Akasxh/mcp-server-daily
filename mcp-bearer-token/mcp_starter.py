@@ -9,9 +9,10 @@ from fastmcp import FastMCP
 from fastmcp.server.auth.providers.bearer import BearerAuthProvider, RSAKeyPair
 try:
     from googleapiclient.discovery import build
-    from google.oauth2.service_account import Credentials
+    from google.oauth2.credentials import Credentials
+    from google.auth.transport.requests import Request
 except Exception:  # pragma: no cover - optional dependency
-    build = Credentials = None
+    build = Credentials = Request = None
 from mcp import ErrorData, McpError
 from mcp.server.auth.provider import AccessToken
 from mcp.types import TextContent, ImageContent, INVALID_PARAMS, INTERNAL_ERROR
@@ -33,21 +34,29 @@ load_dotenv()
 
 TOKEN = os.environ.get("AUTH_TOKEN")
 MY_NUMBER = os.environ.get("MY_NUMBER")
-GOOGLE_CREDENTIALS_JSON = os.environ.get("GOOGLE_CREDENTIALS_JSON")
-GOOGLE_CALENDAR_ID = os.environ.get("GOOGLE_CALENDAR_ID")
+GOOGLE_CALENDAR_ID = os.environ.get("GOOGLE_CALENDAR_ID", "primary")
 TIME_ZONE = os.environ.get("TIME_ZONE", "UTC")
 EXPENSE_DB_PATH = os.environ.get("EXPENSE_DB_PATH", "expenses.db")
+CALENDAR_TOKENS_FILE = os.environ.get("CALENDAR_TOKENS_FILE", "calendar_tokens.json")
 
-calendar_service = None
-if GOOGLE_CREDENTIALS_JSON and GOOGLE_CALENDAR_ID and build and Credentials:
+SCOPES = ["https://www.googleapis.com/auth/calendar"]
+
+# In-memory token store, persisted to disk
+_calendar_tokens: dict[str, dict] = {}
+if os.path.exists(CALENDAR_TOKENS_FILE):
     try:
-        creds = Credentials.from_service_account_info(
-            json.loads(GOOGLE_CREDENTIALS_JSON),
-            scopes=["https://www.googleapis.com/auth/calendar"],
-        )
-        calendar_service = build("calendar", "v3", credentials=creds)
-    except Exception as e:
-        print(f"Failed to initialize Google Calendar client: {e}")
+        with open(CALENDAR_TOKENS_FILE, "r", encoding="utf-8") as f:
+            _calendar_tokens.update(json.load(f))
+    except Exception:
+        pass
+
+
+def _save_calendar_tokens() -> None:
+    try:
+        with open(CALENDAR_TOKENS_FILE, "w", encoding="utf-8") as f:
+            json.dump(_calendar_tokens, f)
+    except Exception:
+        pass
 
 assert TOKEN is not None, "Please set AUTH_TOKEN in your .env file"
 assert MY_NUMBER is not None, "Please set MY_NUMBER in your .env file"
@@ -204,6 +213,39 @@ async def job_finder(
  
 
 # --- Google Calendar Tools ---
+
+
+def connect_calendar(user_id: str, token_json: str) -> str:
+    """Store OAuth tokens for a user after the authorization flow."""
+    try:
+        _calendar_tokens[user_id] = json.loads(token_json)
+        _save_calendar_tokens()
+        return "Calendar connected"
+    except json.JSONDecodeError:
+        raise McpError(ErrorData(code=INVALID_PARAMS, message="Invalid token JSON"))
+
+
+def get_calendar_service(user_id: str):
+    """Return a Google Calendar service for the given user, if authorized."""
+    if not build or not Credentials:
+        return None
+    token = _calendar_tokens.get(user_id)
+    if not token:
+        return None
+    try:
+        creds = Credentials.from_authorized_user_info(token, SCOPES)
+        if creds.expired and creds.refresh_token and Request:
+            try:
+                creds.refresh(Request())
+                _calendar_tokens[user_id] = json.loads(creds.to_json())
+                _save_calendar_tokens()
+            except Exception:
+                return None
+        return build("calendar", "v3", credentials=creds)
+    except Exception:
+        return None
+
+
 def send_whatsapp_reminder(summary: str, start_iso: str) -> None:
     """Send a WhatsApp message for an event if Twilio credentials are configured."""
     account_sid = os.environ.get("TWILIO_ACCOUNT_SID")
@@ -235,12 +277,14 @@ AddEventDescription = RichToolDescription(
 
 @mcp.tool(description=AddEventDescription.model_dump_json())
 async def add_event(
+    user_id: Annotated[str, Field(description="User identifier")],
     title: Annotated[str, Field(description="Title of the event")],
     date: Annotated[str, Field(description="Event date in YYYY-MM-DD format")],
     time: Annotated[str, Field(description="Event time in HH:MM (24h) format")],
 ) -> str:
-    if calendar_service is None:
-        raise McpError(ErrorData(code=INTERNAL_ERROR, message="Google Calendar is not configured"))
+    service = get_calendar_service(user_id)
+    if service is None:
+        raise McpError(ErrorData(code=INVALID_PARAMS, message="Calendar not authorized"))
 
     start_dt = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M").replace(tzinfo=ZoneInfo(TIME_ZONE))
     end_dt = start_dt + timedelta(hours=1)
@@ -251,7 +295,7 @@ async def add_event(
     }
 
     def _insert():
-        return calendar_service.events().insert(calendarId=GOOGLE_CALENDAR_ID, body=event).execute()
+        return service.events().insert(calendarId=GOOGLE_CALENDAR_ID, body=event).execute()
 
     created = await asyncio.to_thread(_insert)
     await asyncio.to_thread(send_whatsapp_reminder, title, start_dt.isoformat())
@@ -268,16 +312,18 @@ UpcomingEventsDescription = RichToolDescription(
 
 @mcp.tool(description=UpcomingEventsDescription.model_dump_json())
 async def upcoming_events(
+    user_id: Annotated[str, Field(description="User identifier")],
     count: Annotated[int, Field(description="Number of events to return", ge=1)] = 5,
 ) -> str:
-    if calendar_service is None:
-        raise McpError(ErrorData(code=INTERNAL_ERROR, message="Google Calendar is not configured"))
+    service = get_calendar_service(user_id)
+    if service is None:
+        raise McpError(ErrorData(code=INVALID_PARAMS, message="Calendar not authorized"))
 
     now = datetime.utcnow().isoformat() + "Z"
 
     def _list():
         return (
-            calendar_service.events()
+            service.events()
             .list(
                 calendarId=GOOGLE_CALENDAR_ID,
                 timeMin=now,
