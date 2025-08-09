@@ -44,7 +44,7 @@ async function redirectToGoogle(c: Context, oauthReqInfo: AuthRequest, headers: 
         hostedDomain: c.env.HOSTED_DOMAIN,
         redirectUri: new URL('/callback', c.req.raw.url).href,
         // scope: 'email profile',
-        scope: 'email profile https://www.googleapis.com/auth/gmail.send',
+        scope: 'email profile https://www.googleapis.com/auth/gmail.send https://www.googleapis.com/auth/drive.readonly',
         state: btoa(JSON.stringify(oauthReqInfo)),
         upstreamUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
       }),

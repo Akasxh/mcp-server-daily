@@ -2,6 +2,13 @@
 
 This is a [Model Context Protocol (MCP)](https://modelcontextprotocol.io/introduction) server that supports remote MCP connections, with Google OAuth built-in.
 
+Available tools include:
+
+- `validate` – verify the server is reachable
+- `send_gmail` – send an email using the Gmail API
+- `search_files` – search Google Drive for files and return their MIME types
+- `read_file` – fetch file content from Google Drive using `gdrive:///<file_id>` URIs
+
 ## Getting Started
 
 Clone the repo & install dependencies: `pnpm install`
