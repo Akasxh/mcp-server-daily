@@ -7,8 +7,11 @@ from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 from fastmcp.server.auth.providers.bearer import BearerAuthProvider, RSAKeyPair
-from googleapiclient.discovery import build
-from google.oauth2.service_account import Credentials
+try:
+    from googleapiclient.discovery import build
+    from google.oauth2.service_account import Credentials
+except Exception:  # pragma: no cover - optional dependency
+    build = Credentials = None
 from mcp import ErrorData, McpError
 from mcp.server.auth.provider import AccessToken
 from mcp.types import TextContent, ImageContent, INVALID_PARAMS, INTERNAL_ERROR
@@ -17,7 +20,13 @@ from pydantic import BaseModel, Field, AnyUrl
 import markdownify
 import httpx
 import readabilipy
-from legal_assistant import answer_question
+try:
+    from legal_assistant import answer_question
+except Exception:  # pragma: no cover - optional dependency
+    def answer_question(_: str) -> str:
+        return "Legal assistant unavailable."
+from expense_tracker import ExpenseStorage
+from utility_dispatcher import split_bill as split_bill_func
 
 # --- Load environment variables ---
 load_dotenv()
@@ -27,9 +36,10 @@ MY_NUMBER = os.environ.get("MY_NUMBER")
 GOOGLE_CREDENTIALS_JSON = os.environ.get("GOOGLE_CREDENTIALS_JSON")
 GOOGLE_CALENDAR_ID = os.environ.get("GOOGLE_CALENDAR_ID")
 TIME_ZONE = os.environ.get("TIME_ZONE", "UTC")
+EXPENSE_DB_PATH = os.environ.get("EXPENSE_DB_PATH", "expenses.db")
 
 calendar_service = None
-if GOOGLE_CREDENTIALS_JSON and GOOGLE_CALENDAR_ID:
+if GOOGLE_CREDENTIALS_JSON and GOOGLE_CALENDAR_ID and build and Credentials:
     try:
         creds = Credentials.from_service_account_info(
             json.loads(GOOGLE_CREDENTIALS_JSON),
@@ -41,6 +51,8 @@ if GOOGLE_CREDENTIALS_JSON and GOOGLE_CALENDAR_ID:
 
 assert TOKEN is not None, "Please set AUTH_TOKEN in your .env file"
 assert MY_NUMBER is not None, "Please set MY_NUMBER in your .env file"
+
+expense_storage = ExpenseStorage(db_path=EXPENSE_DB_PATH)
 
 # --- Auth Provider ---
 class SimpleBearerAuthProvider(BearerAuthProvider):
@@ -351,6 +363,60 @@ async def translate(
         raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Unexpected translation response: {e}"))
 
     return translated
+
+
+# --- Expense and Bill Tools ---
+
+SPLIT_BILL_DESCRIPTION = RichToolDescription(
+    description="Split a bill among people with an optional tip.",
+    use_when="Use when the user wants to know each person's share of a bill.",
+)
+
+@mcp.tool(name="split_bill", description=SPLIT_BILL_DESCRIPTION.model_dump_json())
+async def split_bill(
+    total: Annotated[float, Field(description="Total bill amount", gt=0)],
+    num_people: Annotated[int, Field(description="Number of people", gt=0)],
+    tip_percent: Annotated[float, Field(description="Tip percentage", ge=0)] = 0.0,
+) -> float:
+    try:
+        return split_bill_func(total, num_people, tip_percent)
+    except ValueError as e:
+        raise McpError(ErrorData(code=INVALID_PARAMS, message=str(e)))
+
+
+ADD_EXPENSE_DESCRIPTION = RichToolDescription(
+    description="Store an expense for a user identified by phone number.",
+    use_when="The user reports spending and wants it saved.",
+)
+
+@mcp.tool(name="add_expense", description=ADD_EXPENSE_DESCRIPTION.model_dump_json())
+async def add_expense(
+    phone: Annotated[str, Field(description="User phone number")],
+    amount: Annotated[float, Field(description="Expense amount", gt=0)],
+    category: Annotated[str, Field(description="Expense category")],
+    timestamp: Annotated[str | None, Field(description="ISO timestamp") ] = None,
+) -> str:
+    try:
+        ts = datetime.fromisoformat(timestamp) if timestamp else datetime.now()
+        expense_storage.add_expense(phone, amount, category, ts)
+        return "Expense recorded"
+    except ValueError as e:
+        raise McpError(ErrorData(code=INVALID_PARAMS, message=str(e)))
+
+
+WEEKLY_SUMMARY_DESCRIPTION = RichToolDescription(
+    description="Get this week's spending totals per category for a user.",
+    use_when="The user asks for a weekly expense summary.",
+)
+
+@mcp.tool(name="weekly_summary", description=WEEKLY_SUMMARY_DESCRIPTION.model_dump_json())
+async def weekly_summary(
+    phone: Annotated[str, Field(description="User phone number")],
+) -> dict[str, float]:
+    try:
+        return expense_storage.weekly_summary(phone)
+    except ValueError as e:
+        raise McpError(ErrorData(code=INVALID_PARAMS, message=str(e)))
 
 
 # Image inputs and sending images

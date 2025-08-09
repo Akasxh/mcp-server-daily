@@ -19,6 +19,7 @@ class ExpenseStorage:
             """
             CREATE TABLE IF NOT EXISTS expenses (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                phone TEXT NOT NULL,
                 amount REAL NOT NULL,
                 category TEXT NOT NULL,
                 timestamp TEXT NOT NULL
@@ -27,14 +28,22 @@ class ExpenseStorage:
         )
         self.conn.commit()
 
-    def add_expense(self, amount: float, category: str, timestamp: datetime) -> None:
+    def add_expense(
+        self, phone: str, amount: float, category: str, timestamp: datetime
+    ) -> None:
+        if amount <= 0:
+            raise ValueError("Amount must be positive.")
+        if not category:
+            raise ValueError("Category is required.")
+        if not re.fullmatch(r"\+?\d{10,15}", phone):
+            raise ValueError("Invalid phone number.")
         self.conn.execute(
-            "INSERT INTO expenses(amount, category, timestamp) VALUES(?,?,?)",
-            (amount, category, timestamp.isoformat()),
+            "INSERT INTO expenses(phone, amount, category, timestamp) VALUES(?,?,?,?)",
+            (phone, amount, category, timestamp.isoformat()),
         )
         self.conn.commit()
 
-    def weekly_summary(self) -> Dict[str, float]:
+    def weekly_summary(self, phone: str) -> Dict[str, float]:
         """Return total expenses per category for the current week."""
         now = datetime.now()
         start_of_week = now - timedelta(days=now.weekday())
@@ -42,14 +51,14 @@ class ExpenseStorage:
         cur = self.conn.execute(
             """
             SELECT category, SUM(amount) FROM expenses
-            WHERE timestamp >= ?
+            WHERE phone = ? AND timestamp >= ?
             GROUP BY category
             """,
-            (start_dt.isoformat(),),
+            (phone, start_dt.isoformat()),
         )
         return {row[0]: row[1] for row in cur.fetchall()}
 
-    def monthly_category_breakdown(self, category: str) -> Dict[str, float]:
+    def monthly_category_breakdown(self, phone: str, category: str) -> Dict[str, float]:
         """Return day-wise totals for a category in the current month."""
         now = datetime.now()
         start = datetime(now.year, now.month, 1)
@@ -60,28 +69,32 @@ class ExpenseStorage:
         cur = self.conn.execute(
             """
             SELECT DATE(timestamp), SUM(amount) FROM expenses
-            WHERE timestamp >= ? AND timestamp < ? AND category = ?
+            WHERE phone = ? AND timestamp >= ? AND timestamp < ? AND category = ?
             GROUP BY DATE(timestamp)
             ORDER BY DATE(timestamp)
             """,
-            (start.isoformat(), next_month.isoformat(), category),
+            (phone, start.isoformat(), next_month.isoformat(), category),
         )
         return {row[0]: row[1] for row in cur.fetchall()}
 
-    def export_data(self, fmt: str = "csv") -> str:
-        """Export all expense records to CSV or JSON. Returns the filename."""
-        cur = self.conn.execute(
-            "SELECT amount, category, timestamp FROM expenses ORDER BY timestamp"
-        )
+    def export_data(self, fmt: str = "csv", phone: str | None = None) -> str:
+        """Export expense records to CSV or JSON. Returns the filename."""
+        query = "SELECT phone, amount, category, timestamp FROM expenses"
+        params: list[str] = []
+        if phone:
+            query += " WHERE phone = ?"
+            params.append(phone)
+        query += " ORDER BY timestamp"
+        cur = self.conn.execute(query, params)
         rows = [
-            {"amount": r[0], "category": r[1], "timestamp": r[2]}
+            {"phone": r[0], "amount": r[1], "category": r[2], "timestamp": r[3]}
             for r in cur.fetchall()
         ]
         if fmt == "csv":
             filename = "expenses_export.csv"
             with open(filename, "w", newline="") as f:
                 writer = csv.DictWriter(
-                    f, fieldnames=["amount", "category", "timestamp"]
+                    f, fieldnames=["phone", "amount", "category", "timestamp"]
                 )
                 writer.writeheader()
                 writer.writerows(rows)
