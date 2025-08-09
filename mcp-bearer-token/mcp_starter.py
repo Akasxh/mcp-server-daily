@@ -7,8 +7,9 @@ from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 from fastmcp.server.auth.providers.bearer import BearerAuthProvider, RSAKeyPair
+from pathlib import Path
 from googleapiclient.discovery import build
-from google.oauth2.service_account import Credentials
+from google.oauth2.credentials import Credentials
 from mcp import ErrorData, McpError
 from mcp.server.auth.provider import AccessToken
 from mcp.types import TextContent, ImageContent, INVALID_PARAMS, INTERNAL_ERROR
@@ -24,20 +25,24 @@ load_dotenv()
 
 TOKEN = os.environ.get("AUTH_TOKEN")
 MY_NUMBER = os.environ.get("MY_NUMBER")
-GOOGLE_CREDENTIALS_JSON = os.environ.get("GOOGLE_CREDENTIALS_JSON")
 GOOGLE_CALENDAR_ID = os.environ.get("GOOGLE_CALENDAR_ID")
 TIME_ZONE = os.environ.get("TIME_ZONE", "UTC")
+GOOGLE_CALENDAR_AUTH_URL = os.environ.get("GOOGLE_CALENDAR_AUTH_URL", "")
 
-calendar_service = None
-if GOOGLE_CREDENTIALS_JSON and GOOGLE_CALENDAR_ID:
+
+def get_calendar_service(user_id: str):
+    """Return a Calendar API service for the given user or None if not authorized."""
+    token_dir = Path(os.environ.get("GOOGLE_CALENDAR_TOKEN_DIR", "google_tokens"))
+    token_path = token_dir / f"{user_id}.json"
+    if not token_path.exists():
+        return None
     try:
-        creds = Credentials.from_service_account_info(
-            json.loads(GOOGLE_CREDENTIALS_JSON),
-            scopes=["https://www.googleapis.com/auth/calendar"],
+        creds = Credentials.from_authorized_user_file(
+            str(token_path), scopes=["https://www.googleapis.com/auth/calendar"]
         )
-        calendar_service = build("calendar", "v3", credentials=creds)
-    except Exception as e:
-        print(f"Failed to initialize Google Calendar client: {e}")
+        return build("calendar", "v3", credentials=creds)
+    except Exception:
+        return None
 
 assert TOKEN is not None, "Please set AUTH_TOKEN in your .env file"
 assert MY_NUMBER is not None, "Please set MY_NUMBER in your .env file"
@@ -226,9 +231,15 @@ async def add_event(
     title: Annotated[str, Field(description="Title of the event")],
     date: Annotated[str, Field(description="Event date in YYYY-MM-DD format")],
     time: Annotated[str, Field(description="Event time in HH:MM (24h) format")],
+    user_id: Annotated[str, Field(description="Unique user identifier")],
 ) -> str:
-    if calendar_service is None:
-        raise McpError(ErrorData(code=INTERNAL_ERROR, message="Google Calendar is not configured"))
+    service = get_calendar_service(user_id)
+    if service is None:
+        msg = (
+            "Google Calendar is not authorized. "
+            f"Run connect_calendar: {GOOGLE_CALENDAR_AUTH_URL}"
+        )
+        raise McpError(ErrorData(code=INVALID_PARAMS, message=msg))
 
     start_dt = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M").replace(tzinfo=ZoneInfo(TIME_ZONE))
     end_dt = start_dt + timedelta(hours=1)
@@ -239,7 +250,7 @@ async def add_event(
     }
 
     def _insert():
-        return calendar_service.events().insert(calendarId=GOOGLE_CALENDAR_ID, body=event).execute()
+        return service.events().insert(calendarId=GOOGLE_CALENDAR_ID, body=event).execute()
 
     created = await asyncio.to_thread(_insert)
     await asyncio.to_thread(send_whatsapp_reminder, title, start_dt.isoformat())
@@ -256,16 +267,22 @@ UpcomingEventsDescription = RichToolDescription(
 
 @mcp.tool(description=UpcomingEventsDescription.model_dump_json())
 async def upcoming_events(
+    user_id: Annotated[str, Field(description="Unique user identifier")],
     count: Annotated[int, Field(description="Number of events to return", ge=1)] = 5,
 ) -> str:
-    if calendar_service is None:
-        raise McpError(ErrorData(code=INTERNAL_ERROR, message="Google Calendar is not configured"))
+    service = get_calendar_service(user_id)
+    if service is None:
+        msg = (
+            "Google Calendar is not authorized. "
+            f"Run connect_calendar: {GOOGLE_CALENDAR_AUTH_URL}"
+        )
+        raise McpError(ErrorData(code=INVALID_PARAMS, message=msg))
 
     now = datetime.utcnow().isoformat() + "Z"
 
     def _list():
         return (
-            calendar_service.events()
+            service.events()
             .list(
                 calendarId=GOOGLE_CALENDAR_ID,
                 timeMin=now,
