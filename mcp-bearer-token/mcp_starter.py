@@ -1,9 +1,14 @@
 import asyncio
+import json
+from datetime import datetime, timedelta
 from typing import Annotated
 import os
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from fastmcp import FastMCP
 from fastmcp.server.auth.providers.bearer import BearerAuthProvider, RSAKeyPair
+from googleapiclient.discovery import build
+from google.oauth2.service_account import Credentials
 from mcp import ErrorData, McpError
 from mcp.server.auth.provider import AccessToken
 from mcp.types import TextContent, ImageContent, INVALID_PARAMS, INTERNAL_ERROR
@@ -19,6 +24,20 @@ load_dotenv()
 
 TOKEN = os.environ.get("AUTH_TOKEN")
 MY_NUMBER = os.environ.get("MY_NUMBER")
+GOOGLE_CREDENTIALS_JSON = os.environ.get("GOOGLE_CREDENTIALS_JSON")
+GOOGLE_CALENDAR_ID = os.environ.get("GOOGLE_CALENDAR_ID")
+TIME_ZONE = os.environ.get("TIME_ZONE", "UTC")
+
+calendar_service = None
+if GOOGLE_CREDENTIALS_JSON and GOOGLE_CALENDAR_ID:
+    try:
+        creds = Credentials.from_service_account_info(
+            json.loads(GOOGLE_CREDENTIALS_JSON),
+            scopes=["https://www.googleapis.com/auth/calendar"],
+        )
+        calendar_service = build("calendar", "v3", credentials=creds)
+    except Exception as e:
+        print(f"Failed to initialize Google Calendar client: {e}")
 
 assert TOKEN is not None, "Please set AUTH_TOKEN in your .env file"
 assert MY_NUMBER is not None, "Please set MY_NUMBER in your .env file"
@@ -170,6 +189,111 @@ async def job_finder(
         )
 
     raise McpError(ErrorData(code=INVALID_PARAMS, message="Please provide either a job description, a job URL, or a search query in user_goal."))
+ 
+
+# --- Google Calendar Tools ---
+def send_whatsapp_reminder(summary: str, start_iso: str) -> None:
+    """Send a WhatsApp message for an event if Twilio credentials are configured."""
+    account_sid = os.environ.get("TWILIO_ACCOUNT_SID")
+    auth_token = os.environ.get("TWILIO_AUTH_TOKEN")
+    whatsapp_from = os.environ.get("TWILIO_WHATSAPP_FROM")
+    to_number = os.environ.get("MY_NUMBER")
+    if not all([account_sid, auth_token, whatsapp_from, to_number]):
+        return
+    from twilio.rest import Client
+
+    client = Client(account_sid, auth_token)
+    body = f"Reminder: {summary} at {start_iso}"
+    try:
+        client.messages.create(
+            body=body,
+            from_=whatsapp_from,
+            to=f"whatsapp:+{to_number}",
+        )
+    except Exception:
+        pass
+
+
+AddEventDescription = RichToolDescription(
+    description="Add an event to Google Calendar using the command 'add event <title> on <date> at <time>'.",
+    use_when="Schedule a meeting or reminder at a specific date and time.",
+    side_effects="Creates a new event in Google Calendar and optionally sends a WhatsApp reminder.",
+)
+
+
+@mcp.tool(description=AddEventDescription.model_dump_json())
+async def add_event(
+    title: Annotated[str, Field(description="Title of the event")],
+    date: Annotated[str, Field(description="Event date in YYYY-MM-DD format")],
+    time: Annotated[str, Field(description="Event time in HH:MM (24h) format")],
+) -> str:
+    if calendar_service is None:
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message="Google Calendar is not configured"))
+
+    start_dt = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M").replace(tzinfo=ZoneInfo(TIME_ZONE))
+    end_dt = start_dt + timedelta(hours=1)
+    event = {
+        "summary": title,
+        "start": {"dateTime": start_dt.isoformat(), "timeZone": TIME_ZONE},
+        "end": {"dateTime": end_dt.isoformat(), "timeZone": TIME_ZONE},
+    }
+
+    def _insert():
+        return calendar_service.events().insert(calendarId=GOOGLE_CALENDAR_ID, body=event).execute()
+
+    created = await asyncio.to_thread(_insert)
+    await asyncio.to_thread(send_whatsapp_reminder, title, start_dt.isoformat())
+
+    return f"Event '{title}' scheduled for {start_dt.strftime('%Y-%m-%d %H:%M %Z')}" + (f" (id: {created.get('id')})" if created else "")
+
+
+UpcomingEventsDescription = RichToolDescription(
+    description="List upcoming Google Calendar events.",
+    use_when="The user asks for the next scheduled events.",
+    side_effects=None,
+)
+
+
+@mcp.tool(description=UpcomingEventsDescription.model_dump_json())
+async def upcoming_events(
+    count: Annotated[int, Field(description="Number of events to return", ge=1)] = 5,
+) -> str:
+    if calendar_service is None:
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message="Google Calendar is not configured"))
+
+    now = datetime.utcnow().isoformat() + "Z"
+
+    def _list():
+        return (
+            calendar_service.events()
+            .list(
+                calendarId=GOOGLE_CALENDAR_ID,
+                timeMin=now,
+                maxResults=count,
+                singleEvents=True,
+                orderBy="startTime",
+            )
+            .execute()
+        )
+
+    events = await asyncio.to_thread(_list)
+    items = events.get("items", [])
+    if not items:
+        return "No upcoming events found."
+
+    lines: list[str] = []
+    for ev in items:
+        start = ev.get("start", {}).get("dateTime") or ev.get("start", {}).get("date")
+        if start and start.endswith("Z"):
+            start = start[:-1] + "+00:00"
+        try:
+            dt = datetime.fromisoformat(start).astimezone(ZoneInfo(TIME_ZONE))
+            start_str = dt.strftime("%Y-%m-%d %H:%M %Z")
+        except Exception:
+            start_str = start
+        lines.append(f"- {start_str} {ev.get('summary', '')}")
+
+    return "\n".join(lines)
 
 
 # --- Legal Question Answering ---
