@@ -3,6 +3,8 @@ import json
 from datetime import datetime, timedelta
 from typing import Annotated
 import os
+import sys
+from pathlib import Path
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from fastmcp import FastMCP
@@ -18,6 +20,9 @@ import markdownify
 import httpx
 import readabilipy
 from legal_assistant import answer_question
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from news import get_headlines
 
 # --- Load environment variables ---
 load_dotenv()
@@ -351,6 +356,22 @@ async def translate(
         raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Unexpected translation response: {e}"))
 
     return translated
+
+
+# News headlines tool
+NEWS_HEADLINES_DESCRIPTION = RichToolDescription(
+    description="Fetch top news headlines from Google News.",
+    use_when="The user requests the latest news headlines.",
+    side_effects="Makes a network request to fetch news.",
+)
+
+
+@mcp.tool(description=NEWS_HEADLINES_DESCRIPTION.model_dump_json())
+async def news_headlines(
+    category: Annotated[str | None, Field(description="Google News topic, e.g., 'WORLD'")] = None,
+    region: Annotated[str | None, Field(description="Region code, e.g., 'US'")] = None,
+) -> str:
+    return await asyncio.to_thread(get_headlines, category, region)
 
 
 # Image inputs and sending images
