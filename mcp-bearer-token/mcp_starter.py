@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, AnyUrl
 import markdownify
 import httpx
 import readabilipy
+from legal_assistant import answer_question
 
 # --- Load environment variables ---
 load_dotenv()
@@ -169,6 +170,21 @@ async def job_finder(
         )
 
     raise McpError(ErrorData(code=INVALID_PARAMS, message="Please provide either a job description, a job URL, or a search query in user_goal."))
+
+
+# --- Legal Question Answering ---
+LegalQuestionDescription = RichToolDescription(
+    description="Answer basic legal questions using a small knowledge base.",
+    use_when="Use for landlord/tenant, traffic fines, simple contracts, or other common legal scenarios.",
+    side_effects="Returns informational guidance with a legal disclaimer.",
+)
+
+
+@mcp.tool(description=LegalQuestionDescription.model_dump_json())
+async def answer_legal_question(
+    question: Annotated[str, Field(description="Legal question to ask")]
+) -> str:
+    return answer_question(question)
 
 
 # Image inputs and sending images

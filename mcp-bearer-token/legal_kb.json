@@ -1,0 +1,22 @@
+[
+  {
+    "topic": "landlord_tenant",
+    "keywords": ["landlord", "tenant", "rent", "lease", "eviction", "security deposit"],
+    "response": "Landlord-tenant laws generally require landlords to maintain habitable premises and follow legal procedures for eviction. Tenants usually must pay rent on time and keep the unit in good condition." 
+  },
+  {
+    "topic": "traffic_fines",
+    "keywords": ["traffic", "ticket", "fine", "speeding", "parking"],
+    "response": "Traffic fines can often be paid or contested in local traffic court. Deadlines to respond are typically short, and ignoring a ticket may lead to additional penalties or license suspension." 
+  },
+  {
+    "topic": "simple_contracts",
+    "keywords": ["contract", "agreement", "sign", "signature", "simple contract"],
+    "response": "A simple contract usually needs an offer, acceptance, and consideration. Written terms help avoid disputes, and all parties should understand obligations before signing." 
+  },
+  {
+    "topic": "common_scenarios",
+    "keywords": ["small claims", "warranty", "return policy", "consumer", "employer", "employee"],
+    "response": "Common legal scenarios often involve small claims or consumer issues. Procedures and rights vary by jurisdiction, so check local rules or contact the appropriate agency when unsure." 
+  }
+]
