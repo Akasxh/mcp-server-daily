@@ -200,3 +200,31 @@ calc sin(pi / 2) + 2**3
 
 Each command returns a human-readable response and helpful error messages for
 invalid input.
+
+## Calculator MCP Server
+
+A lightweight MCP server exposes a `calculate` tool backed by the
+`scientific_calculator` helper.
+
+### Run the server
+
+```bash
+cd mcp-calculator
+python mcp_calculator.py
+```
+
+The server listens on port `8088`.
+
+### Connect from Puch
+
+Once the server is running locally you can connect:
+
+```text
+/mcp connect http://localhost:8088/mcp
+```
+
+You can then evaluate expressions, e.g.:
+
+```text
+/mcp run calculate {"expression": "sin(pi/2) + 2**3"}
+```
