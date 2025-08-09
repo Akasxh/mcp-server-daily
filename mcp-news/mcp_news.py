@@ -9,13 +9,14 @@ from news_service import get_headlines
 mcp = FastMCP("News MCP Server")
 
 
-@mcp.tool(description="Fetch top Google News headlines")
+@mcp.tool(description="Fetch news headlines from NewsAPI")
 async def headlines(
-    category: Annotated[str | None, Field(description="Google News topic", example="WORLD")] = None,
-    region: Annotated[str | None, Field(description="Region code", example="US")] = None,
-    limit: Annotated[int, Field(gt=0, le=10, description="Number of headlines to return")] = 5,
-) -> str:
-    return await get_headlines(category=category, region=region, limit=limit)
+    query: Annotated[str | None, Field(description="Search term", example="AI")] = None,
+    country: Annotated[str | None, Field(description="Two-letter country code", example="us")] = "us",
+    category: Annotated[str | None, Field(description="News category", example="technology")] = None,
+    limit: Annotated[int, Field(gt=0, le=100, description="Number of articles to return")] = 5,
+) -> dict:
+    return await get_headlines(query=query, country=country, category=category, limit=limit)
 
 
 async def main() -> None:

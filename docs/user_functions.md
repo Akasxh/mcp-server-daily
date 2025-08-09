@@ -39,10 +39,10 @@ Examples:
 ```
 
 ## News Headlines
-Fetch top Google News headlines by category and region.
+Fetch top headlines using the NewsAPI service. You can filter by search term, country or category and the tool returns the raw JSON from the API.
 Example:
 ```
-/mcp run headlines {"category": "WORLD", "region": "US"}
+/mcp run headlines {"country": "us", "category": "technology", "limit": 3}
 ```
 
 ## Utility Dispatcher
