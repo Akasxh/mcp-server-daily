@@ -181,6 +181,10 @@ via a simple text-based dispatcher. Supported commands include:
 - `age <YYYY-MM-DD>`
 - `calc <expression>`
 
+The `currency` command fetches live exchange rates from [currencyapi.com](https://currencyapi.com/).
+Set the environment variable `CURRENCY_API_KEY` with your API key. Rates are
+cached for one hour to reduce external requests.
+
 Run the module directly and enter commands when prompted:
 
 ```bash
