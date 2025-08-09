@@ -171,6 +171,48 @@ async def job_finder(
     raise McpError(ErrorData(code=INVALID_PARAMS, message="Please provide either a job description, a job URL, or a search query in user_goal."))
 
 
+# Translation tool
+
+TRANSLATE_DESCRIPTION = RichToolDescription(
+    description="Translate text between languages using Google Translate.",
+    use_when="The user needs text translated from one language to another.",
+    side_effects="Makes a network request to an external translation service.",
+)
+
+@mcp.tool(description=TRANSLATE_DESCRIPTION.model_dump_json())
+async def translate(
+    text: Annotated[str, Field(description="Text to translate")],
+    target_lang: Annotated[str, Field(description="Target language code, e.g., 'es' for Spanish")],
+    source_lang: Annotated[str | None, Field(description="Source language code or 'auto' to detect automatically")] = "auto",
+) -> str:
+    """Translate text using the public Google Translate endpoint."""
+    src = "auto" if not source_lang or source_lang.lower() == "auto" else source_lang.lower()
+    dest = target_lang.lower()
+
+    async with httpx.AsyncClient() as client:
+        try:
+            resp = await client.get(
+                "https://translate.googleapis.com/translate_a/single",
+                params={"client": "gtx", "sl": src, "tl": dest, "dt": "t", "q": text},
+                timeout=10,
+            )
+            resp.raise_for_status()
+        except httpx.HTTPStatusError as e:
+            if e.response.status_code == 400:
+                raise McpError(ErrorData(code=INVALID_PARAMS, message="Unsupported language specified."))
+            raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Translation API error: {e.response.text}"))
+        except Exception as e:
+            raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Translation request failed: {e}"))
+
+    try:
+        data = resp.json()
+        translated = "".join(part[0] for part in data[0])
+    except Exception as e:
+        raise McpError(ErrorData(code=INTERNAL_ERROR, message=f"Unexpected translation response: {e}"))
+
+    return translated
+
+
 # Image inputs and sending images
 
 MAKE_IMG_BLACK_AND_WHITE_DESCRIPTION = RichToolDescription(

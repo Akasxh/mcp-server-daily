@@ -13,6 +13,9 @@ MCP (Model Context Protocol) allows AI assistants like Puch to connect to extern
 - **Fetch job postings from URLs** - Give a job posting link and get the full details
 - **Search for jobs** - Use natural language to find relevant job opportunities
 
+### 🌐 Translation Tool
+- **Translate text** - Convert text between languages with automatic source detection
+
 ### 🖼️ Image Processing Tool
 - **Convert images to black & white** - Upload any image and get a monochrome version
 
