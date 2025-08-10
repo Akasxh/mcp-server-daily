@@ -1,7 +1,7 @@
 import asyncio
 import json
 from datetime import datetime, timedelta
-from typing import Annotated
+from typing import Annotated, Any
 import os
 from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
@@ -26,8 +26,11 @@ try:
 except Exception:  # pragma: no cover - optional dependency
     def answer_question(_: str) -> str:
         return "Legal assistant unavailable."
+
 import sys
 from pathlib import Path
+import xml.etree.ElementTree as ET
+import time
 
 sys.path.append(str(Path(__file__).resolve().parent.parent))
 from expense_tracker import ExpenseStorage
@@ -36,7 +39,8 @@ from utility_dispatcher import split_bill as split_bill_func, scientific_calcula
 # --- Load environment variables ---
 load_dotenv()
 
-TOKEN = os.environ.get("AUTH_TOKEN")
+# --- Environment Variables ---
+AUTH_TOKEN = os.environ.get("AUTH_TOKEN")
 MY_NUMBER = os.environ.get("MY_NUMBER")
 GOOGLE_CALENDAR_ID = os.environ.get("GOOGLE_CALENDAR_ID", "primary")
 TIME_ZONE = os.environ.get("TIME_ZONE", "UTC")
@@ -47,7 +51,6 @@ CALENDAR_TOKENS_FILE = os.environ.get("CALENDAR_TOKENS_FILE", "calendar_tokens.j
 SPOTIFY_CLIENT_ID = os.environ.get("SPOTIFY_CLIENT_ID")
 SPOTIFY_CLIENT_SECRET = os.environ.get("SPOTIFY_CLIENT_SECRET")
 SPOTIFY_REFRESH_TOKEN = os.environ.get("SPOTIFY_REFRESH_TOKEN")
-
 
 SCOPES = ["https://www.googleapis.com/auth/calendar"]
 
@@ -63,6 +66,10 @@ if os.path.exists(CALENDAR_TOKENS_FILE):
 # Spotify access token
 _spotify_access_token: str | None = None
 
+assert AUTH_TOKEN is not None, "Please set AUTH_TOKEN in your .env file"
+assert MY_NUMBER is not None, "Please set MY_NUMBER in your .env file"
+
+expense_storage = ExpenseStorage(db_path=EXPENSE_DB_PATH)
 
 def _save_calendar_tokens() -> None:
     try:
@@ -71,10 +78,36 @@ def _save_calendar_tokens() -> None:
     except Exception:
         pass
 
-assert TOKEN is not None, "Please set AUTH_TOKEN in your .env file"
-assert MY_NUMBER is not None, "Please set MY_NUMBER in your .env file"
+# --- News Helper Functions ---
+async def get_headlines(
+    *,
+    query: str | None = None,
+    country: str | None = "us",
+    category: str | None = None,
+    limit: int = 5,
+) -> dict[str, Any]:
+    """Retrieve headlines from NewsAPI and return the JSON response."""
+    print("TOOL NEWS CALLED")
+    api_key = os.getenv("NEWS_API_KEY")
+    if not api_key:
+        return {"error": "NEWS_API_KEY environment variable not set"}
 
-expense_storage = ExpenseStorage(db_path=EXPENSE_DB_PATH)
+    params = {"apiKey": api_key, "pageSize": limit}
+    if query:
+        params["q"] = query
+    if country:
+        params["country"] = country
+    if category:
+        params["category"] = category
+
+    url = "https://newsapi.org/v2/top-headlines"
+    try:
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(url, params=params, timeout=10)
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as e:
+        return {"error": f"Failed to fetch news: {str(e)}"}
 
 # --- Auth Provider ---
 class SimpleBearerAuthProvider(BearerAuthProvider):
@@ -205,34 +238,34 @@ async def _spotify_request(method: str, url: str, **kwargs) -> httpx.Response:
     return resp
 
 # --- News Helper Functions ---
-async def get_headlines(
-    query: str | None = None,
-    country: str | None = "us",
-    category: str | None = None,
-    limit: int = 5,
-) -> dict:
-    """Fetch top headlines from NewsAPI and return JSON data."""
-    api_key = os.getenv("NEWS_API")
-    if not api_key:
-        raise McpError(ErrorData(code=INTERNAL_ERROR, message="NEWS_API environment variable not set"))
+# async def get_headlines(
+#     query: str | None = None,
+#     country: str | None = "us",
+#     category: str | None = None,
+#     limit: int = 5,
+# ) -> dict:
+#     """Fetch top headlines from NewsAPI and return JSON data."""
+#     api_key = os.getenv("NEWS_API_KEY")
+#     if not api_key:
+#         raise McpError(ErrorData(code=INTERNAL_ERROR, message="NEWS_API environment variable not set"))
 
-    params: dict[str, str | int] = {"apiKey": api_key, "pageSize": limit}
-    if query:
-        params["q"] = query
-    if country:
-        params["country"] = country
-    if category:
-        params["category"] = category
+#     params: dict[str, str | int] = {"apiKey": api_key, "pageSize": limit}
+#     if query:
+#         params["q"] = query
+#     if country:
+#         params["country"] = country
+#     if category:
+#         params["category"] = category
 
-    async with httpx.AsyncClient() as client:
-        resp = await client.get("https://newsapi.org/v2/top-headlines", params=params, timeout=10)
-        resp.raise_for_status()
-        return resp.json()
+#     async with httpx.AsyncClient() as client:
+#         resp = await client.get("https://newsapi.org/v2/top-headlines", params=params, timeout=10)
+#         resp.raise_for_status()
+#         return resp.json()
 
 # --- MCP Server Setup ---
 mcp = FastMCP(
     "Job Finder MCP Server",
-    auth=SimpleBearerAuthProvider(TOKEN),
+    auth=SimpleBearerAuthProvider(AUTH_TOKEN),
 )
 
 # --- Tool: validate (required by Puch) ---

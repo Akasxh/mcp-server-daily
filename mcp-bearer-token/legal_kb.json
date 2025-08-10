@@ -1,22 +1,620 @@
 [
   {
     "topic": "landlord_tenant",
-    "keywords": ["landlord", "tenant", "rent", "lease", "eviction", "security deposit"],
-    "response": "Landlord-tenant laws generally require landlords to maintain habitable premises and follow legal procedures for eviction. Tenants usually must pay rent on time and keep the unit in good condition." 
+    "keywords": [
+      "landlord",
+      "tenant",
+      "rent",
+      "lease",
+      "eviction",
+      "security deposit",
+      "tenancy",
+      "rental agreement"
+    ],
+    "response": "Landlords must keep premises habitable and follow due process for eviction; tenants must pay rent on time and avoid damage. Written rental agreements and receipts reduce disputes."
+  },
+  {
+    "topic": "rent_increase",
+    "keywords": [
+      "rent hike",
+      "increase rent",
+      "rent revision",
+      "rent control",
+      "standard rent"
+    ],
+    "response": "Rent increases usually require advance written notice and must respect local rent-control or state rules. Sudden or retrospective hikes are commonly restricted."
+  },
+  {
+    "topic": "security_deposit",
+    "keywords": [
+      "deposit",
+      "security",
+      "advance",
+      "refund deposit",
+      "deduction"
+    ],
+    "response": "Security deposits should be returned after lawful deductions for unpaid rent or documented damage. Keep move‑in photos and a handover checklist to avoid disputes."
+  },
+  {
+    "topic": "eviction_process",
+    "keywords": [
+      "evict",
+      "vacate notice",
+      "termination of tenancy",
+      "illegal eviction",
+      "lockout"
+    ],
+    "response": "Eviction typically requires proper notice and, if contested, a court order. Self‑help lockouts or cutting utilities are often unlawful; tenants may seek immediate relief."
+  },
+  {
+    "topic": "maintenance_repairs",
+    "keywords": [
+      "repair",
+      "maintenance",
+      "leak",
+      "electricity issue",
+      "plumbing",
+      "habitability"
+    ],
+    "response": "Landlords generally handle structural repairs and essential services; tenants should promptly notify issues in writing and allow access for fixes."
+  },
+  {
+    "topic": "subletting_roommates",
+    "keywords": [
+      "sublet",
+      "sub‑let",
+      "pg",
+      "roommate",
+      "flatmate",
+      "paying guest"
+    ],
+    "response": "Subletting or adding roommates often needs landlord consent per the lease. Unauthorized subletting can be a ground for eviction."
   },
   {
     "topic": "traffic_fines",
-    "keywords": ["traffic", "ticket", "fine", "speeding", "parking"],
-    "response": "Traffic fines can often be paid or contested in local traffic court. Deadlines to respond are typically short, and ignoring a ticket may lead to additional penalties or license suspension." 
+    "keywords": [
+      "traffic",
+      "ticket",
+      "fine",
+      "challan",
+      "speeding",
+      "parking",
+      "signal",
+      "violation"
+    ],
+    "response": "Traffic fines can be paid or contested through the designated portal or local traffic court. Deadlines are short; inaction can add penalties or lead to license issues."
+  },
+  {
+    "topic": "license_and_rc",
+    "keywords": [
+      "driving license",
+      "dl",
+      "rc",
+      "registration certificate",
+      "revoke",
+      "suspension"
+    ],
+    "response": "Keep your driving licence and registration valid; repeated or major violations can trigger suspension. You usually have a right to a hearing or appeal."
+  },
+  {
+    "topic": "accidents_insurance",
+    "keywords": [
+      "accident",
+      "third party",
+      "motor claim",
+      "hit and run",
+      "insurance"
+    ],
+    "response": "After an accident, prioritize safety, inform police/insurer promptly, and preserve evidence. Third‑party liability is mandatory; claim windows are time‑bound."
   },
   {
     "topic": "simple_contracts",
-    "keywords": ["contract", "agreement", "sign", "signature", "simple contract"],
-    "response": "A simple contract usually needs an offer, acceptance, and consideration. Written terms help avoid disputes, and all parties should understand obligations before signing." 
+    "keywords": [
+      "contract",
+      "agreement",
+      "offer",
+      "acceptance",
+      "consideration",
+      "signature",
+      "terms"
+    ],
+    "response": "A simple contract needs a clear offer, acceptance, and consideration. Put important terms in writing and keep dated copies signed by all parties."
+  },
+  {
+    "topic": "e_signatures",
+    "keywords": [
+      "e‑sign",
+      "digital signature",
+      "electronic",
+      "otp",
+      "online contract"
+    ],
+    "response": "Electronic signatures can bind parties if intent and consent are clear. Keep evidence of the signing flow (emails, timestamps, IP/OTP logs)."
+  },
+  {
+    "topic": "refunds_warranty",
+    "keywords": [
+      "refund",
+      "return",
+      "warranty",
+      "defect",
+      "replacement",
+      "consumer"
+    ],
+    "response": "If a product or service is defective or deficient, document the issue and contact the seller or service provider in writing. Escalate to consumer authorities if unresolved."
+  },
+  {
+    "topic": "service_deficiency",
+    "keywords": [
+      "bad service",
+      "negligence service",
+      "repair not done",
+      "delay service"
+    ],
+    "response": "For service deficiencies, demand a written fix deadline and keep records. If unmet, you may seek a refund, compensation, or file a consumer complaint."
+  },
+  {
+    "topic": "chargebacks",
+    "keywords": [
+      "chargeback",
+      "card dispute",
+      "wrong debit",
+      "failed transaction"
+    ],
+    "response": "Dispute unauthorized or failed transactions with your bank quickly and in writing. Provide receipts, screenshots, and merchant responses as evidence."
+  },
+  {
+    "topic": "employment_offer_probation",
+    "keywords": [
+      "offer letter",
+      "probation",
+      "joining",
+      "job contract"
+    ],
+    "response": "Read probation terms, role, pay, and notice periods carefully before joining. Keep a signed copy of the final offer and any amendments."
+  },
+  {
+    "topic": "resignation_termination",
+    "keywords": [
+      "resign",
+      "termination",
+      "fired",
+      "layoff",
+      "notice period",
+      "relieving letter"
+    ],
+    "response": "Notice periods should follow the contract or policy. Request a relieving letter and full‑and‑final settlement; challenge unlawful deductions or abrupt terminations in writing."
+  },
+  {
+    "topic": "salary_delay",
+    "keywords": [
+      "salary not paid",
+      "wage delay",
+      "non payment",
+      "dues"
+    ],
+    "response": "Escalate salary delays to HR in writing and keep payslips and offer letters. Persistent non‑payment can be escalated to labour authorities or legal notice."
+  },
+  {
+    "topic": "posh_harassment",
+    "keywords": [
+      "harassment",
+      "sexual harassment",
+      "posh",
+      "internal committee",
+      "icc",
+      "workplace safety"
+    ],
+    "response": "Workplaces must provide a safe environment and a formal complaint route. Report to the Internal Complaints Committee or designated authority and preserve evidence."
+  },
+  {
+    "topic": "non_compete_nda",
+    "keywords": [
+      "non‑compete",
+      "non compete",
+      "nda",
+      "confidentiality",
+      "restrictive covenant"
+    ],
+    "response": "NDAs protect confidential information. Post‑employment non‑compete terms are often narrowly enforceable; focus on confidentiality and non‑solicitation obligations."
+  },
+  {
+    "topic": "gratuity_pf_esi",
+    "keywords": [
+      "gratuity",
+      "provident fund",
+      "pf",
+      "esi",
+      "benefits",
+      "final settlement"
+    ],
+    "response": "Confirm your eligibility for gratuity and social‑security benefits; ensure correct KYC and bank details to avoid delays in withdrawal or settlement."
+  },
+  {
+    "topic": "overtime_leave",
+    "keywords": [
+      "overtime",
+      "leave",
+      "holiday",
+      "comp off",
+      "weekly off"
+    ],
+    "response": "Leave and overtime rules depend on policy and local law. Track hours and get approvals in writing to avoid later disputes."
+  },
+  {
+    "topic": "marriage_divorce",
+    "keywords": [
+      "marriage",
+      "divorce",
+      "separation",
+      "annulment"
+    ],
+    "response": "Marriage and divorce procedures vary by personal and local law. Document finances and custody arrangements early; consider mediation for settlements."
+  },
+  {
+    "topic": "maintenance_alimony",
+    "keywords": [
+      "maintenance",
+      "alimony",
+      "spousal support",
+      "child support"
+    ],
+    "response": "Courts consider income, needs, and dependents when awarding support. Keep evidence of earnings and expenses to substantiate claims or defenses."
+  },
+  {
+    "topic": "domestic_violence",
+    "keywords": [
+      "domestic violence",
+      "protection order",
+      "dv act",
+      "abuse at home"
+    ],
+    "response": "You can seek immediate protection orders, residence relief, and financial support. Record incidents, save messages, and contact authorities or helplines promptly."
+  },
+  {
+    "topic": "child_custody_guardianship",
+    "keywords": [
+      "custody",
+      "guardianship",
+      "visitation",
+      "parenting plan"
+    ],
+    "response": "Courts focus on the child’s best interests. Draft practical parenting plans covering schooling, health, and holidays."
+  },
+  {
+    "topic": "adoption",
+    "keywords": [
+      "adopt",
+      "adoption",
+      "guardianship order",
+      "agency"
+    ],
+    "response": "Adoption requires approvals through authorized channels and due diligence on documents. Avoid informal transfers; they can create long‑term legal issues."
+  },
+  {
+    "topic": "property_sale_purchase",
+    "keywords": [
+      "sale deed",
+      "purchase property",
+      "registry",
+      "agreement to sell"
+    ],
+    "response": "Verify title, encumbrances, and approvals before paying. Use a written agreement, staged payments, and safeguard originals until registration completes."
+  },
+  {
+    "topic": "builder_delay_rera",
+    "keywords": [
+      "builder delay",
+      "rera",
+      "possession late",
+      "refund from builder"
+    ],
+    "response": "For delayed possession, notify the builder in writing and track promised dates. Consumer and real‑estate regulators may allow refunds, interest, or compensation."
+  },
+  {
+    "topic": "society_bylaws_dues",
+    "keywords": [
+      "housing society",
+      "maintenance dues",
+      "bylaws",
+      "noc"
+    ],
+    "response": "Follow society bylaws for dues and permissions. Disputes can be raised before the managing committee and, if needed, local authorities or forums."
+  },
+  {
+    "topic": "property_tax_mutation",
+    "keywords": [
+      "mutation",
+      "property tax",
+      "name transfer",
+      "encumbrance certificate"
+    ],
+    "response": "After purchase or inheritance, update records (mutation) and pay property tax on time. Keep receipts and obtain an encumbrance certificate when needed."
+  },
+  {
+    "topic": "partition_inheritance",
+    "keywords": [
+      "inheritance",
+      "will",
+      "succession",
+      "probate",
+      "partition"
+    ],
+    "response": "If a will exists, probate or validation may be required. Without a will, succession follows applicable personal law; collect legal‑heir and asset documents early."
+  },
+  {
+    "topic": "fir_police_complaint",
+    "keywords": [
+      "fir",
+      "police complaint",
+      "report crime",
+      "nc",
+      "gd"
+    ],
+    "response": "Serious cognizable offences can be reported for FIR registration; keep a written acknowledgement or number. Preserve evidence and witness details."
+  },
+  {
+    "topic": "arrest_bail",
+    "keywords": [
+      "arrest",
+      "custody",
+      "bail",
+      "anticipatory bail",
+      "remand"
+    ],
+    "response": "Arrested persons have rights to be informed of grounds, legal counsel, and to be produced before a magistrate within a set time. Bail depends on offence and facts."
+  },
+  {
+    "topic": "defamation",
+    "keywords": [
+      "defamation",
+      "libel",
+      "slander",
+      "reputation"
+    ],
+    "response": "Defamation claims require false statements that harm reputation. Truth, fair comment, and privilege are typical defenses; preserve posts and communications."
+  },
+  {
+    "topic": "cybercrime_fraud",
+    "keywords": [
+      "cybercrime",
+      "online fraud",
+      "upi scam",
+      "phishing",
+      "impersonation"
+    ],
+    "response": "Act quickly: block accounts/cards, complain on official portals, and file a police report. Keep screenshots, transaction IDs, and timestamps as evidence."
+  },
+  {
+    "topic": "data_privacy_rights",
+    "keywords": [
+      "privacy",
+      "personal data",
+      "data breach",
+      "delete my data",
+      "consent"
+    ],
+    "response": "You can usually ask organizations to correct or delete inaccurate personal data and to explain how it’s used. Withdraw consent in writing when appropriate."
+  },
+  {
+    "topic": "account_bans_platforms",
+    "keywords": [
+      "account banned",
+      "suspended",
+      "platform terms",
+      "appeal"
+    ],
+    "response": "Review the platform’s terms and appeal process. Submit a concise appeal with IDs and screenshots; repeated violations or chargebacks often trigger permanent bans."
+  },
+  {
+    "topic": "copyright_basics",
+    "keywords": [
+      "copyright",
+      "plagiarism",
+      "piracy",
+      "license",
+      "creative work"
+    ],
+    "response": "Copyright protects original works automatically upon creation. Using others’ content needs permission unless a narrow legal exception applies; credit alone is not enough."
+  },
+  {
+    "topic": "trademark_basics",
+    "keywords": [
+      "trademark",
+      "brand name",
+      "logo",
+      "passing off"
+    ],
+    "response": "A distinctive mark identifies your goods or services. Avoid names confusingly similar to existing marks; misuse can invite objections or legal action."
+  },
+  {
+    "topic": "patent_basics",
+    "keywords": [
+      "patent",
+      "novelty",
+      "invention",
+      "prior art"
+    ],
+    "response": "Patents require novelty and inventive step. Public disclosure before filing can destroy rights; consider a confidentiality agreement when discussing ideas."
+  },
+  {
+    "topic": "company_incorporation",
+    "keywords": [
+      "incorporate",
+      "company",
+      "llp",
+      "partnership",
+      "registration"
+    ],
+    "response": "Choose a structure (sole‑prop, partnership, LLP, company) based on liability and compliance needs. Reserve the name, draft documents, and obtain required registrations."
+  },
+  {
+    "topic": "licenses_registrations",
+    "keywords": [
+      "license",
+      "registration",
+      "shop act",
+      "trade license",
+      "fssai",
+      "gst"
+    ],
+    "response": "Check sector‑specific licenses (e.g., food, trade) and tax registration requirements. Keep renewal dates and compliance calendars."
+  },
+  {
+    "topic": "msme_delayed_payments",
+    "keywords": [
+      "msme",
+      "payment delay",
+      "invoice not paid",
+      "supplier dues"
+    ],
+    "response": "Record purchase orders and delivery proofs. For micro/small suppliers, formal mechanisms may exist to recover delayed payments with interest."
+  },
+  {
+    "topic": "arbitration_mediation",
+    "keywords": [
+      "arbitration",
+      "mediation",
+      "adr",
+      "settlement"
+    ],
+    "response": "Contracts may require arbitration or encourage mediation. Early settlement can reduce time and costs; ensure the clause clearly names seat and rules."
+  },
+  {
+    "topic": "small_claims_civil",
+    "keywords": [
+      "small claims",
+      "civil suit",
+      "summary suit",
+      "injunction"
+    ],
+    "response": "For smaller monetary disputes, summary or simplified procedures may exist. File within limitation periods and attach key documents as exhibits."
+  },
+  {
+    "topic": "limitation_periods",
+    "keywords": [
+      "limitation",
+      "time bar",
+      "deadline to sue",
+      "time limit"
+    ],
+    "response": "Most claims have strict filing deadlines. Note the date of breach or discovery and act promptly; delays can forfeit rights."
+  },
+  {
+    "topic": "education_fees_refund",
+    "keywords": [
+      "school fees",
+      "college fees",
+      "refund",
+      "certificate withheld"
+    ],
+    "response": "Demand a written breakup and refund policy from the institution. Keep payment receipts; escalate unreasonable refusals to the regulator or ombudsman where available."
+  },
+  {
+    "topic": "medical_negligence",
+    "keywords": [
+      "medical negligence",
+      "hospital",
+      "doctor",
+      "consent",
+      "malpractice"
+    ],
+    "response": "Request medical records and second opinions. Document timelines and bills; serious lapses can be pursued through consumer or other legal forums."
+  },
+  {
+    "topic": "health_insurance_claim",
+    "keywords": [
+      "health insurance",
+      "claim rejected",
+      "cashless denied",
+      "policy"
+    ],
+    "response": "Read the policy exclusions and submit all required documents. Appeal denials in writing and request reasons; external grievance channels may exist."
+  },
+  {
+    "topic": "loan_default_collection",
+    "keywords": [
+      "loan default",
+      "recovery agent",
+      "collection",
+      "settlement",
+      "notice"
+    ],
+    "response": "Communicate with lenders in writing, propose restructuring if needed, and log all collection calls. Harassment or threats can be reported."
+  },
+  {
+    "topic": "credit_report_errors",
+    "keywords": [
+      "credit score",
+      "report error",
+      "cibil",
+      "bureau dispute"
+    ],
+    "response": "Dispute incorrect entries with the bureau and lender in writing. Keep acknowledgements; corrections can take time to reflect."
+  },
+  {
+    "topic": "rti_access_info",
+    "keywords": [
+      "rti",
+      "information request",
+      "public authority",
+      "transparency"
+    ],
+    "response": "You may request information from public authorities by filing a concise application with fees where applicable. Appeals exist if you receive no response or denials."
+  },
+  {
+    "topic": "passport_visa_issues",
+    "keywords": [
+      "passport",
+      "visa",
+      "overstay",
+      "immigration",
+      "lookout"
+    ],
+    "response": "Keep travel documents valid and truthful. Overstays or misrepresentations can cause bans; consult the relevant embassy or authority for rectification steps."
+  },
+  {
+    "topic": "delivery_cancellations",
+    "keywords": [
+      "delivery late",
+      "cancelled order",
+      "no refund",
+      "ecommerce"
+    ],
+    "response": "If deliveries are delayed or cancelled without refund, raise a written ticket and request timelines. Escalate to payment providers if merchants remain unresponsive."
+  },
+  {
+    "topic": "warranty_service_centers",
+    "keywords": [
+      "service center",
+      "warranty claim",
+      "repair delay",
+      "rma"
+    ],
+    "response": "Log a service request with a job‑sheet number and photos. If repeated failures occur, request replacement or refund per policy."
   },
   {
     "topic": "common_scenarios",
-    "keywords": ["small claims", "warranty", "return policy", "consumer", "employer", "employee"],
-    "response": "Common legal scenarios often involve small claims or consumer issues. Procedures and rights vary by jurisdiction, so check local rules or contact the appropriate agency when unsure." 
+    "keywords": [
+      "small claims",
+      "warranty",
+      "return policy",
+      "consumer",
+      "employer",
+      "employee",
+      "general legal"
+    ],
+    "response": "Many day‑to‑day disputes involve purchases, services, employment, or housing. Keep everything in writing, meet deadlines, and use official grievance channels."
+  },
+  {
+    "topic": "unknown_topic",
+    "keywords": [
+      "not sure",
+      "don’t know",
+      "help",
+      "advise",
+      "legal question"
+    ],
+    "response": "If your issue doesn’t fit a category, write a short timeline with dates, amounts, and messages. Clear facts make it easier to find the right procedure."
   }
 ]

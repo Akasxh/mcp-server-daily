@@ -7,7 +7,7 @@ from typing import Any, Dict, Optional
 
 import httpx
 
-API_KEY = os.getenv("NEWS_API")
+API_KEY = os.getenv("NEWS_API_KEY")
 
 
 class NewsAPIError(Exception):
@@ -35,7 +35,7 @@ async def get_headlines(
     Raises:
         NewsAPIError: If the request fails or the API key is missing.
     """
-
+    print("TOOL NEWS CALLED")
     if not API_KEY:
         raise NewsAPIError("NEWS_API environment variable not set")
 
